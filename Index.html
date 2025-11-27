@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Turkey Hunt - Mobile</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; /* Critical for mobile games */
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        /* Mobile-friendly HUD adjustments */
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 15px; /* Tighter padding for mobile */
+            color: white;
+            font-size: 18px; /* Slightly smaller base font */
+            text-shadow: 2px 2px 0 #000;
+            font-weight: bold;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+        }
+        .hud-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .hud-bottom {
+            padding: 15px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-end;
+            padding-bottom: 25px; /* Lift up for thumb clearance */
+        }
+        .ammo-box {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            border: 2px solid white;
+            display: flex;
+            gap: 5px;
+            pointer-events: none;
+        }
+        .bullet {
+            width: 12px;
+            height: 25px;
+            background-color: gold;
+            border: 1px solid #c5a000;
+            border-radius: 2px 2px 0 0;
+        }
+        .bullet.empty {
+            background-color: #444;
+            border-color: #222;
+        }
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 10;
+        }
+        .title-text {
+            color: #e67e22; 
+            text-shadow: 4px 4px 0 #000; 
+            font-size: 8vw; /* Responsive font size */
+            margin-bottom: 0;
+            text-align: center;
+            line-height: 1;
+        }
+        .info-text {
+            font-size: 4vw; /* Responsive font size */
+            text-align: center;
+            margin: 5px 0;
+            line-height: 1.3;
+            max-width: 90%;
+        }
+        .highlight {
+            color: #89ff00;
+            font-weight: bold;
+        }
+        button {
+            background: #d35400;
+            color: white;
+            border: 3px solid white;
+            padding: 15px 30px;
+            font-size: 20px;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 0 #a04000;
+            transition: transform 0.1s;
+        }
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #a04000;
+        }
+        #reload-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 30px;
+            font-weight: bold;
+            text-shadow: 3px 3px 0 #000;
+            display: none;
+            pointer-events: none;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border: 3px solid white;
+            z-index: 5;
+            white-space: nowrap;
+        }
+        #timer-box { color: #89ff00; }
+        .level-badge {
+            background: #d35400;
+            padding: 2px 6px;
+            border: 2px solid white;
+            font-size: 18px;
+        }
+        .promotion-text {
+            color: gold;
+            font-size: 24px;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+            margin-top: 10px;
+            text-shadow: 0 0 10px orange;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* ROTATE DEVICE OVERLAY */
+        #rotate-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1a1a1a;
+            z-index: 9999;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #e67e22;
+        }
+        .rotate-icon {
+            font-size: 50px;
+            margin-bottom: 20px;
+            animation: rotate-phone 2s infinite ease-in-out;
+        }
+        @keyframes rotate-phone {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-90deg); }
+            75% { transform: rotate(-90deg); }
+            100% { transform: rotate(0deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ROTATE MESSAGE -->
+    <div id="rotate-overlay">
+        <div class="rotate-icon">📱</div>
+        <h2 style="color: white; margin: 10px;">PLEASE ROTATE</h2>
+        <p style="color: #aaa; padding: 0 20px;">This game is best played in landscape mode.</p>
+    </div>
+
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div class="hud-row">
+                <div class="level-badge" id="level-display">LVL 1</div>
+                <div id="score">SCORE: 0</div>
+            </div>
+            <div class="hud-row">
+                <!-- Shows target for next rank -->
+                <div style="font-size: 14px;">NEXT: <span id="target-score" style="color:#ffcc00">1000</span></div>
+                <div id="timer-box">TIME: 30</div>
+            </div>
+        </div>
+        <div class="hud-bottom">
+            <div class="ammo-box" id="ammo-container"></div>
+        </div>
+    </div>
+
+    <div id="reload-msg">RELOADING...</div>
+
+    <!-- START SCREEN -->
+    <div id="start-screen" class="overlay-screen">
+        <h1 class="title-text">TURKEY HUNT</h1>
+        <h3 style="color:white; margin:5px; font-size: 3vw;">MOBILE EDITION</h3>
+        <p class="info-text">Tap to shoot!</p>
+        <p class="info-text" style="color:#aaa; font-size: 14px; margin-top: 15px;">
+            1000 pts = Level 2<br>
+            2500 pts = Level 3 (Skip!)
+        </p>
+        <button id="start-btn">PLAY</button>
+    </div>
+
+    <!-- LEVEL COMPLETE SCREEN -->
+    <div id="level-screen" class="overlay-screen" style="display: none;">
+        <h1 class="title-text" style="color: #89ff00;">LEVEL COMPLETE!</h1>
+        <p class="info-text">Score: <span id="level-score-val" class="highlight">0</span></p>
+        
+        <div id="promotion-msg" class="promotion-text" style="display:none">SKIPPED!</div>
+        
+        <p class="info-text" style="margin-top: 20px;">Next:</p>
+        <h2 style="font-size: 30px; margin: 5px; color: gold;">LEVEL <span id="next-level-num">2</span></h2>
+        
+        <button id="next-level-btn">CONTINUE</button>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameover-screen" class="overlay-screen" style="display: none;">
+        <h1 class="title-text" style="color: red;">GAME OVER</h1>
+        <p class="info-text">Missed Rank!</p>
+        <p class="info-text">Score: <span id="final-score-val" class="highlight">0</span></p>
+        <p class="info-text" style="font-size:14px; color:#aaa;">Needed: <span id="fail-target-val">0</span></p>
+        <button id="restart-btn">RETRY</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const rotateOverlay = document.getElementById('rotate-overlay');
+        
+        // UI Elements
+        const startScreen = document.getElementById('start-screen');
+        const levelScreen = document.getElementById('level-screen');
+        const gameOverScreen = document.getElementById('gameover-screen');
+        
+        const scoreEl = document.getElementById('score');
+        const targetEl = document.getElementById('target-score');
+        const timerEl = document.getElementById('timer-box');
+        const levelEl = document.getElementById('level-display');
+        const ammoContainer = document.getElementById('ammo-container');
+        const reloadMsg = document.getElementById('reload-msg');
+
+        // Buttons
+        document.getElementById('start-btn').addEventListener('click', () => startGame(1));
+        document.getElementById('next-level-btn').addEventListener('click', startNextLevel);
+        document.getElementById('restart-btn').addEventListener('click', () => startGame(1));
+
+        // Constants
+        const LEVEL_DURATION = 30;
+        const MAX_AMMO = 3;
+        // Competitive thresholds
+        const LEVEL_THRESHOLDS = [0, 0, 1000, 2500, 4000, 6000, 8500, 11000, 14000, 18000, 25000];
+        
+        // State
+        let gameActive = false;
+        let loopRunning = false; 
+        let currentLevel = 1;
+        let nextCalculatedLevel = 1; 
+        let score = 0;
+        let timeRemaining = LEVEL_DURATION;
+        let lastTime = 0;
+        let currentAmmo = MAX_AMMO;
+        let isReloading = false;
+        
+        // Entities
+        let turkeys = [];
+        let particles = []; 
+        let shots = []; 
+        let floatTexts = []; 
+        
+        let spawnTimer = 0;
+        let spawnInterval = 2000; 
+        let speedMultiplier = 1.0;
+
+        let groundLevel = 0;
+
+        let cat = {
+            state: 'HIDDEN', x: 0, y: 0, targetX: 0, speed: 8, heldTurkey: null, animTimer: 0
+        };
+
+        // --- ORIENTATION & RESIZE LOGIC ---
+        function checkOrientation() {
+            // If width is less than height, we are likely in portrait on mobile
+            if (window.innerWidth < window.innerHeight) {
+                rotateOverlay.style.display = 'flex';
+                // Note: We don't pause the game loop here to prevent complexity, 
+                // but input is blocked by the overlay.
+            } else {
+                rotateOverlay.style.display = 'none';
+            }
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Adjust ground level for mobile screens
+            // On very wide screens (iPhone notch area), keep ground distinct
+            groundLevel = canvas.height - (canvas.height * 0.15); // Bottom 15% is ground
+            cat.y = groundLevel - 10;
+            
+            checkOrientation();
+        }
+        
+        window.addEventListener('resize', resize);
+        resize(); // Initial check
+
+        // --- GAME LOGIC ---
+
+        function startGame(level) {
+            startScreen.style.display = 'none';
+            levelScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            
+            if (level === 1) {
+                score = 0;
+                speedMultiplier = 1.0;
+                spawnInterval = 2000;
+            } else {
+                speedMultiplier = 1.0 + (level - 1) * 0.10;
+                if (speedMultiplier > 3.0) speedMultiplier = 3.0;
+                spawnInterval = Math.max(600, 2000 - (level - 1) * 100);
+            }
+            
+            currentLevel = level;
+            timeRemaining = LEVEL_DURATION;
+            currentAmmo = MAX_AMMO;
+            
+            lastTime = 0; 
+            
+            turkeys = [];
+            particles = [];
+            floatTexts = [];
+            cat.state = 'HIDDEN';
+            
+            updateHUD();
+            updateAmmoUI();
+            
+            gameActive = true;
+            
+            if (!loopRunning) {
+                loopRunning = true;
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function startNextLevel() {
+            startGame(nextCalculatedLevel);
+        }
+
+        function calculateLevelFromScore(currentScore) {
+            for (let i = LEVEL_THRESHOLDS.length - 1; i >= 1; i--) {
+                if (currentScore >= LEVEL_THRESHOLDS[i]) return i;
+            }
+            return 1;
+        }
+
+        function getNextTarget(currentLvl) {
+            if (currentLvl + 1 < LEVEL_THRESHOLDS.length) return LEVEL_THRESHOLDS[currentLvl + 1];
+            return "MAX";
+        }
+
+        function finishLevel() {
+            gameActive = false;
+            
+            let qualifiedLevel = calculateLevelFromScore(score);
+            let neededForNext = LEVEL_THRESHOLDS[currentLevel + 1] || 999999;
+            
+            if (score >= neededForNext) {
+                nextCalculatedLevel = Math.max(currentLevel + 1, qualifiedLevel);
+                let levelsSkipped = nextCalculatedLevel - (currentLevel + 1);
+                
+                document.getElementById('level-score-val').innerText = score;
+                document.getElementById('next-level-num').innerText = nextCalculatedLevel;
+                
+                const promoMsg = document.getElementById('promotion-msg');
+                if (levelsSkipped > 0) {
+                    promoMsg.style.display = 'block';
+                    promoMsg.innerText = levelsSkipped === 1 ? "DOUBLE PROMOTION!" : "TRIPLE PROMOTION!";
+                } else {
+                    promoMsg.style.display = 'none';
+                }
+                
+                levelScreen.style.display = 'flex';
+                
+            } else {
+                document.getElementById('final-score-val').innerText = score;
+                document.getElementById('fail-target-val').innerText = neededForNext;
+                gameOverScreen.style.display = 'flex';
+            }
+        }
+
+        function updateHUD() {
+            scoreEl.innerText = `SCORE: ${score}`;
+            let nextTarg = getNextTarget(currentLevel);
+            targetEl.innerText = nextTarg;
+            timerEl.innerText = `${Math.ceil(timeRemaining)}`;
+            levelEl.innerText = `LVL ${currentLevel}`;
+            
+            if (timeRemaining <= 5) timerEl.style.color = 'red';
+            else timerEl.style.color = '#89ff00';
+        }
+
+        function updateAmmoUI() {
+            ammoContainer.innerHTML = '';
+            for(let i=0; i<MAX_AMMO; i++) {
+                const div = document.createElement('div');
+                div.className = `bullet ${i < currentAmmo ? '' : 'empty'}`;
+                ammoContainer.appendChild(div);
+            }
+        }
+
+        // --- INPUT (Touch + Mouse) ---
+        const handleInput = (e) => {
+            if (!gameActive || isReloading) return;
+            
+            // Prevent default to stop scrolling/zooming double taps
+            if(e.cancelable) e.preventDefault();
+
+            let clientX, clientY;
+            if(e.changedTouches) {
+                // Use changedTouches to catch the lift-off or touch start
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    shoot(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+                }
+            } else {
+                shoot(e.clientX, e.clientY);
+            }
+        };
+
+        // Use 'touchstart' for immediate reaction on mobile
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', handleInput, {passive: false});
+
+        function reload() {
+            isReloading = true;
+            reloadMsg.style.display = 'block';
+            setTimeout(() => {
+                currentAmmo = MAX_AMMO;
+                isReloading = false;
+                reloadMsg.style.display = 'none';
+                updateAmmoUI();
+            }, 1200);
+        }
+
+        function shoot(x, y) {
+            if (currentAmmo <= 0) return;
+
+            currentAmmo--;
+            updateAmmoUI();
+            shots.push({x, y, timer: 10});
+
+            for (let i = turkeys.length - 1; i >= 0; i--) {
+                let t = turkeys[i];
+                if (t.state === 'FLYING') {
+                    // Mobile: Slightly larger hitbox forgiveness (+10px)
+                    let hitRadius = (40 * t.scale + 20) + 15; 
+                    let dx = x - t.x;
+                    let dy = y - t.y;
+                    
+                    if (Math.sqrt(dx*dx + dy*dy) < hitRadius) {
+                        t.state = 'FALLING';
+                        t.vy = -5;
+                        createFeathers(t.x, t.y);
+                        
+                        score += t.points;
+                        updateHUD();
+                        
+                        floatTexts.push({
+                            x: t.x,
+                            y: t.y,
+                            text: `+${t.points}`,
+                            life: 1.0,
+                            vy: -2
+                        });
+                        break; // Hit one at a time per touch
+                    }
+                }
+            }
+
+            if (currentAmmo === 0) {
+                setTimeout(reload, 300);
+            }
+        }
+
+        function createFeathers(x, y) {
+            for(let i=0; i<6; i++) { // Slightly fewer particles for mobile performance
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    color: i % 2 === 0 ? '#8B4513' : '#CD853F'
+                });
+            }
+        }
+
+        function spawnTurkey() {
+            const side = Math.random() > 0.5 ? 'left' : 'right';
+            // Mobile: Make minimum scale slightly larger so they are tappable
+            const scale = 0.6 + Math.random() * 0.5; 
+            
+            let points = 100;
+            if (scale < 0.8) points = 500; // Adjusted threshold for mobile size
+            else if (scale < 1.0) points = 300;
+
+            const patterns = ['NORMAL', 'SINE', 'FAST'];
+            const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+
+            let baseSpeed = (3 + Math.random() * 3) * speedMultiplier;
+            if (pattern === 'FAST') baseSpeed += (3 * speedMultiplier);
+
+            // Spawn within top 70% of screen to avoid thumb area at bottom
+            const startY = Math.random() * (canvas.height * 0.55) + 50;
+
+            turkeys.push({
+                x: side === 'left' ? -50 : canvas.width + 50,
+                y: startY,
+                baseY: startY,
+                vx: side === 'left' ? baseSpeed : -baseSpeed,
+                vy: 0,
+                state: 'FLYING',
+                pattern: pattern,
+                wingCycle: 0,
+                scale: scale,
+                points: points,
+                rotation: 0,
+                timeAlive: 0
+            });
+        }
+
+        function update(dt) {
+            if (dt > 100) dt = 16;
+            timeRemaining -= dt / 1000;
+            updateHUD();
+            
+            if (timeRemaining <= 0) {
+                finishLevel();
+                return;
+            }
+
+            spawnTimer += dt;
+            if (spawnTimer > spawnInterval) {
+                spawnTurkey();
+                spawnTimer = 0;
+            }
+
+            turkeys.forEach(t => {
+                t.wingCycle += (0.2 + (t.pattern === 'FAST' ? 0.3 : 0)); 
+                t.timeAlive += 0.05;
+
+                if (t.state === 'FLYING') {
+                    t.x += t.vx;
+
+                    if (t.pattern === 'NORMAL') {
+                        t.y = t.baseY + Math.sin(t.wingCycle) * 5;
+                    } 
+                    else if (t.pattern === 'SINE') {
+                        t.y = t.baseY + Math.sin(t.timeAlive) * 80;
+                    }
+                    else if (t.pattern === 'FAST') {
+                        t.y += (Math.random() - 0.5) * 4;
+                    }
+                    
+                    if ((t.vx > 0 && t.x > canvas.width + 100) || (t.vx < 0 && t.x < -100)) {
+                        t.remove = true;
+                    }
+                } 
+                else if (t.state === 'FALLING') {
+                    t.vy += 0.5;
+                    t.y += t.vy;
+                    t.rotation += 0.15;
+                    if (t.y >= groundLevel) {
+                        t.y = groundLevel;
+                        t.state = 'GROUNDED';
+                        t.rotation = Math.PI;
+                    }
+                }
+            });
+
+            handleCatLogic();
+
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                p.vy += 0.2; p.life -= 0.02;
+            });
+            particles = particles.filter(p => p.life > 0);
+
+            floatTexts.forEach(ft => {
+                ft.y += ft.vy; ft.life -= 0.02;
+            });
+            floatTexts = floatTexts.filter(ft => ft.life > 0);
+
+            shots = shots.filter(s => s.timer-- > 0);
+            turkeys = turkeys.filter(t => !t.remove);
+        }
+
+        function handleCatLogic() {
+            if (cat.state === 'HIDDEN') {
+                const target = turkeys.find(t => t.state === 'GROUNDED' && !t.targeted);
+                if (target) {
+                    target.targeted = true;
+                    cat.heldTurkey = target;
+                    cat.state = 'RUNNING_OUT';
+                    cat.x = canvas.width / 2;
+                    cat.targetX = target.x;
+                }
+            }
+            else if (cat.state === 'RUNNING_OUT') {
+                const dx = cat.targetX - cat.x;
+                if (Math.abs(dx) < 8) {
+                    cat.state = 'GRAB';
+                    cat.animTimer = 20;
+                } else {
+                    cat.x += Math.sign(dx) * cat.speed;
+                }
+            }
+            else if (cat.state === 'GRAB') {
+                cat.animTimer--;
+                if (cat.animTimer <= 0) {
+                    if (cat.heldTurkey) cat.heldTurkey.state = 'FETCHED';
+                    cat.state = 'RETURNING';
+                }
+            }
+            else if (cat.state === 'RETURNING') {
+                const targetX = canvas.width / 2;
+                const dx = targetX - cat.x;
+                
+                if (cat.heldTurkey) {
+                    cat.heldTurkey.x = cat.x;
+                    cat.heldTurkey.y = cat.y - 20;
+                }
+
+                if (Math.abs(dx) < 8) {
+                    if (cat.heldTurkey) cat.heldTurkey.remove = true;
+                    cat.heldTurkey = null;
+                    cat.state = 'HIDDEN';
+                } else {
+                    cat.x += Math.sign(dx) * cat.speed;
+                }
+            }
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#63a4ff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#2d5a27';
+            for (let i = 0; i < canvas.width; i += 80) {
+                ctx.beginPath();
+                ctx.moveTo(i, groundLevel);
+                ctx.lineTo(i + 40, groundLevel - 150);
+                ctx.lineTo(i + 80, groundLevel);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = '#4a7c2e';
+            ctx.fillRect(0, groundLevel, canvas.width, canvas.height - groundLevel);
+
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath();
+            ctx.ellipse(canvas.width / 2, groundLevel + 10, 100, 60, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawTurkey(t) {
+            ctx.save();
+            ctx.translate(t.x, t.y);
+            ctx.rotate(t.rotation);
+            ctx.scale(t.vx > 0 ? -t.scale : t.scale, t.scale);
+
+            // Body
+            ctx.fillStyle = t.pattern === 'FAST' ? '#5D4037' : '#8B4513';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 30, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Tail
+            ctx.fillStyle = '#A0522D';
+            ctx.beginPath();
+            ctx.arc(20, -5, 20, Math.PI * 0.5, Math.PI * 1.5);
+            ctx.fill();
+
+            // Wing
+            ctx.fillStyle = '#654321';
+            ctx.save();
+            ctx.rotate(Math.sin(t.wingCycle) * 0.5);
+            ctx.beginPath();
+            ctx.ellipse(0, 5, 15, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Head
+            ctx.fillStyle = '#A52A2A';
+            ctx.beginPath();
+            ctx.arc(-25, -10, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Wattle
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(-28, -5, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Beak
+            ctx.fillStyle = 'gold';
+            ctx.beginPath();
+            ctx.moveTo(-35, -10);
+            ctx.lineTo(-45, -8);
+            ctx.lineTo(-35, -5);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawCat() {
+            if (cat.state === 'HIDDEN') return;
+
+            ctx.save();
+            ctx.translate(cat.x, cat.y);
+            const facingRight = (cat.state === 'RUNNING_OUT' && cat.targetX > cat.x) || 
+                              (cat.state === 'RETURNING' && canvas.width/2 > cat.x);
+            ctx.scale(facingRight ? 1 : -1, 1);
+
+            ctx.fillStyle = '#FF8C00';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 25, 15, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(15, -10, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(10, -20); ctx.lineTo(15, -28); ctx.lineTo(20, -20);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(18, -20); ctx.lineTo(23, -28); ctx.lineTo(28, -18);
+            ctx.fill();
+            ctx.strokeStyle = '#FF8C00';
+            ctx.lineWidth = 5; ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-20, 0);
+            ctx.quadraticCurveTo(-35, -10 + Math.sin(Date.now()/100)*5, -30, -20);
+            ctx.stroke();
+            ctx.strokeStyle = '#E67E22'; ctx.lineWidth = 4;
+            const legOffset = Math.sin(Date.now()/50) * 10;
+            ctx.beginPath(); ctx.moveTo(15, 10); ctx.lineTo(15 + legOffset, 20); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-15, 10); ctx.lineTo(-15 - legOffset, 20); ctx.stroke();
+            ctx.fillStyle = '#FFE4C4';
+            ctx.beginPath(); ctx.arc(20, -8, 4, 0, Math.PI * 2); ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawFloatTexts() {
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            floatTexts.forEach(ft => {
+                ctx.fillStyle = `rgba(255, 255, 255, ${ft.life})`;
+                ctx.strokeStyle = `rgba(0, 0, 0, ${ft.life})`;
+                ctx.lineWidth = 3;
+                ctx.strokeText(ft.text, ft.x, ft.y);
+                ctx.fillText(ft.text, ft.x, ft.y);
+            });
+        }
+
+        function drawShots() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            shots.forEach(s => {
+                ctx.beginPath(); ctx.arc(s.x, s.y, 20, 0, Math.PI * 2); ctx.fill();
+            });
+            if (shots.length > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.fillRect(0,0,canvas.width, canvas.height);
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            if (gameActive) {
+                update(dt);
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBackground();
+                turkeys.filter(t => t.state === 'GROUNDED' || t.state === 'FETCHED').forEach(drawTurkey);
+                drawCat();
+                turkeys.filter(t => t.state !== 'GROUNDED' && t.state !== 'FETCHED').forEach(drawTurkey);
+                
+                particles.forEach(p => {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.beginPath(); ctx.ellipse(0, 0, 5, 2, Math.PI/4, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                });
+                
+                drawFloatTexts();
+                drawShots();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+</body>
+</html>
+
